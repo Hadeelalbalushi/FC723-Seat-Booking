@@ -1,5 +1,76 @@
-# Apache Airlines Seat Booking application (Part A4)
+import random #import the 'random' module to generate random values
+import string #import the 'string' module to access string-related functions and constants
+import sqlite3
 
+# connecting to the SQLite database and ensure table exists
+def create_database():
+    conn = sqlite3.connect("bookings.db")  # Create or open DB file
+    cursor = conn.cursor()
+
+    # Create bookings table with required columns
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS bookings (
+            reference TEXT PRIMARY KEY,
+            passport TEXT,
+            first_name TEXT,
+            last_name TEXT,
+            seat_row INTEGER,
+            seat_column TEXT
+        )
+    ''')
+    conn.commit()
+    conn.close()
+    
+def save_customer_to_database(reference, passport, first_name, last_name, row, column):
+    conn = sqlite3.connect("bookings.db")
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO bookings (reference, passport, first_name, last_name, seat_row, seat_column)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (reference, passport, first_name, last_name, row, column))
+    conn.commit()
+    conn.close()
+    
+def remove_customer_from_database(row, column):
+    conn = sqlite3.connect("bookings.db")
+    cursor = conn.cursor()
+    cursor.execute('''
+        DELETE FROM bookings WHERE seat_row = ? AND seat_column = ?
+    ''', (row, column))
+    conn.commit()
+    conn.close()
+
+
+# This set will keep track of all generated booking references
+used_references = set()
+
+# Function to generate a unique 8-character booking reference
+def generate_unique_reference():
+    """
+    This function creates a random 8-character booking reference
+    made up of uppercase letters and digits.
+    It ensures the reference is unique by checking against a set of used references.
+    """
+    while True:
+        # Step 1: Create a string of possible characters (A-Z and 0-9)
+        characters = string.ascii_uppercase + string.digits
+
+        # Step 2: Randomly select 8 characters from the pool
+        reference = ''.join(random.choices(characters, k=8))
+
+        # Step 3: Check if it's unique (not used before)
+        if reference not in used_references:
+            used_references.add(reference)  # Save it to prevent future repeats
+            return reference
+
+
+#defining a function to save a booking to a file
+def save_booking_to_file(seat, reference):
+    with open("bookings.txt", "a") as file:  # open in append mode
+        file.write(f"Seat: {seat} | Reference: {reference}\n")  # Save to file
+
+
+# Apache Airlines Seat Booking application (Part A4)
 def create_seat_layout():
     """
   defining a function to creat the seat layout for the application 
@@ -40,29 +111,35 @@ def check_seat_availability(layout, seat):
 
 # defining a function to Book a seat if it's free
 def book_seat(layout, seat):
-    if seat in layout: #check if seat exists
-        if layout[seat] == 'F':
-            layout[seat] = 'R' #change status from free to reserved
-            print(f"Seat {seat} has been successfully booked.") # confirm booking
-        elif layout[seat] == 'R':
-            print("That seat is already booked.") # already booked
-        else:
-            print("That seat cannot be booked (aisle or storage).") #not bookable
-    else:
-        print("Seat number not found.") # this message will appear if the user input was invalid 
+   if seat in layout and layout[seat] == 'F':
+            reference = generate_unique_reference() # Create booking reference
+            # Ask for customer details
+            passport = input("Enter passport number: ")
+            first_name = input("Enter first name: ")
+            last_name = input("Enter last name: ")
+            row = int(seat[:-1])
+            column = seat[-1]
+            
+            layout[seat] = reference  # Store reference instead of 'R'
+            save_customer_to_database(reference, passport, first_name, last_name, row, column)
 
+            print(f"Seat {seat} booked successfully.")
+            print(f"Booking reference: {reference}") 
+   elif seat in layout and layout[seat] != 'F':
+            print("Seat is already booked or unavailable.")
+   else:
+            print("Invalid seat number.")
+        
 # defining a function to Free a booked seat
 def free_seat(layout, seat):
-    if seat in layout:  #if condition to check if seat exists
-        if layout[seat] == 'R':
-            layout[seat] = 'F' # change status to free
-            print(f"Seat {seat} has been freed.")  # confirm release
-        elif layout[seat] == 'F':
-            print("That seat is already free.")  # already free
-        else:
-            print("That seat cannot be changed (aisle or storage).")#not changeable
+    if seat in layout and layout[seat] != 'F' and layout[seat] != 'X' and layout[seat] != 'S':
+        row = int(seat[:-1])
+        column = seat[-1]
+        layout[seat] = 'F'  # Reset seat to free
+        remove_customer_from_database(row, column)  # Remove from DB
+        print(f"Seat {seat} has been freed and booking deleted.")
     else:
-        print("Seat number not found.") #this message will appear if its invalid input
+        print("Seat is already free or cannot be modified.")
 
 # defining a function to Display the entire seat layout
 def display_seating(layout):
@@ -106,7 +183,9 @@ def find_nearest_available_seat(layout, preferred_seat):  #checking if the given
 
 # creating the Main Menu
 def main():
-    layout = create_seat_layout() # creating the initial seating map
+    
+    create_database()                 
+    layout = create_seat_layout()
 
     while True:# using while loop to show the main menu until user exits
         print("\nApache Airlines Seat Booking application ")# menu title
@@ -141,3 +220,4 @@ def main():
 # Run the program
 if __name__ == "__main__":
     main()  #call main menu
+   
